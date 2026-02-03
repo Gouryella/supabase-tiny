@@ -1,0 +1,266 @@
+services:
+  db:
+    image: supabase/postgres:15.8.1.085
+    container_name: supabase-db
+    restart: always
+    ports:
+      - "13732:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-supabase_password}
+      POSTGRES_USER: ${POSTGRES_USER:-supabase_admin}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+
+  auth:
+    image: supabase/gotrue:v2.185.0
+    container_name: supabase-auth
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - "127.0.0.1:13799:9999"
+    environment:
+      GOTRUE_API_PORT: 9999
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      GOTRUE_SITE_URL: https://${SUPABASE_PUBLIC_DOMAIN}
+      API_EXTERNAL_URL: https://${SUPABASE_PUBLIC_DOMAIN}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_EXP: ${JWT_EXP:-3600}
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+
+  rest:
+    image: postgrest/postgrest:v14.3
+    container_name: supabase-rest
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - "127.0.0.1:13730:3000"
+    environment:
+      PGRST_DB_URI: postgres://supabase_admin:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_DB_SCHEMAS: public,storage,graphql_public
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET}
+      PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXP:-3600}
+
+  realtime:
+    image: supabase/realtime:v2.72.0
+    container_name: supabase-realtime
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - "127.0.0.1:13740:4000"
+    environment:
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      DB_AFTER_CONNECT_QUERY: "SET search_path TO _realtime"
+      DB_ENC_KEY: supabaserealtime
+      API_JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      ERL_AFLAGS: -proto_dist inet_tcp
+      RLIMIT_NOFILE: "10000"
+      APP_NAME: realtime
+      SEED_SELF_HOST: "true"
+      RUN_JANITOR: "true"
+
+  supavisor:
+    image: supabase/supavisor:2.7.4
+    container_name: supabase-pooler
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - "127.0.0.1:13743:6543"
+    environment:
+      DATABASE_URL: ecto://supabase_admin:${POSTGRES_PASSWORD}@db:5432/_supabase
+      API_JWT_SECRET: ${JWT_SECRET}
+      METRICS_JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      VAULT_ENC_KEY: ${VAULT_ENC_KEY}
+      POOLER_DEFAULT_POOL_SIZE: 20
+      POOLER_MAX_CLIENT_CONN: 100
+      POOLER_POOL_MODE: transaction
+      DB_POOL_SIZE: 20
+      REGION: local
+      ERL_AFLAGS: -proto_dist inet_tcp
+
+  storage:
+    image: supabase/storage-api:v1.33.5
+    container_name: supabase-storage
+    restart: always
+    depends_on:
+      - db
+      - rest
+      - minio
+    ports:
+      - "127.0.0.1:13750:5000"
+    volumes:
+      - storage-data:/var/lib/storage
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://rest:3000
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      STORAGE_BACKEND: s3
+      GLOBAL_S3_ENDPOINT: http://minio:9000
+      GLOBAL_S3_BUCKET: supabase-storage
+      GLOBAL_S3_FORCE_PATH_STYLE: "true"
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      ENABLE_IMAGE_TRANSFORMATION: "true"
+      IMGPROXY_URL: http://imgproxy:5001
+
+  imgproxy:
+    image: darthsim/imgproxy:v3.30.1
+    container_name: supabase-imgproxy
+    restart: always
+    ports:
+      - "127.0.0.1:13751:5001"
+    volumes:
+      - storage-data:/var/lib/storage
+    environment:
+      IMGPROXY_BIND: ":5001"
+      IMGPROXY_LOCAL_FILESYSTEM_ROOT: /
+      IMGPROXY_USE_ETAG: "true"
+      IMGPROXY_ENABLE_WEBP_DETECTION: "true"
+
+  meta:
+    image: supabase/postgres-meta:v0.95.1
+    container_name: supabase-meta
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - "127.0.0.1:13760:8080"
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: db
+      PG_META_DB_PORT: 5432
+      PG_META_DB_NAME: ${POSTGRES_DB}
+      PG_META_DB_USER: ${POSTGRES_USER}
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      PG_META_CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
+      CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
+
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: supabase-minio
+    restart: always
+    command: server /data --console-address :9090
+    ports:
+      - "127.0.0.1:13790:9000"
+      - "127.0.0.1:13791:9090"
+    volumes:
+      - minio-data:/data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+
+  kong:
+    image: kong:2.8.1
+    container_name: supabase-kong
+    restart: always
+    depends_on:
+      - auth
+      - rest
+      - realtime
+      - storage
+      - meta
+    ports:
+      - "127.0.0.1:13780:8000"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_NGINX_WORKER_PROCESSES: "1"
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth,request-termination,ip-restriction
+    volumes:
+      - ./config/kong.yml:/home/kong/kong.yml:ro
+
+  functions:
+    image: supabase/edge-runtime:v1.70.0
+    container_name: supabase-functions
+    restart: always
+    depends_on:
+      - kong
+    ports:
+      - "127.0.0.1:13792:9000"
+    command:
+      - start
+      - --main-service
+      - /home/deno/functions/main
+    volumes:
+      - ./functions:/home/deno/functions
+    environment:
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      SUPABASE_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      VERIFY_JWT: "false"
+
+  studio:
+    image: supabase/studio:2026.01.27-sha-6aa59ff
+    container_name: supabase-studio
+    restart: always
+    depends_on:
+      - kong
+      - meta
+    ports:
+      - "127.0.0.1:13731:3000"
+    volumes:
+      - studio-data:/var/lib/supabase
+    environment:
+      STUDIO_PG_META_URL: http://meta:8080
+      PG_META_CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_PUBLIC_URL: https://${SUPABASE_PUBLIC_DOMAIN}
+      SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+      NEXT_PUBLIC_SUPABASE_URL: https://${SUPABASE_PUBLIC_DOMAIN}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      NEXT_PUBLIC_SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      # Self-hosted mode configuration
+      NEXT_PUBLIC_IS_PLATFORM: "false"
+      ANALYTICS_ENABLED: ${ANALYTICS_ENABLED:-false}
+      NEXT_ANALYTICS_BACKEND_PROVIDER: ""
+      DEFAULT_ORGANIZATION_NAME: "Default Organization"
+      DEFAULT_PROJECT_NAME: "Default Project"
+      # Logflare/Analytics disabled for self-hosted
+      LOGFLARE_API_KEY: ""
+      LOGFLARE_URL: ""
+      NEXT_PUBLIC_ENABLE_LOGS: "false"
+      # Auth service URL for Studio
+      GOTRUE_URL: http://auth:9999
+      # Reference ID for default project
+      SUPABASE_PROJECT_REF: default
+      SNIPPETS_MANAGEMENT_FOLDER: ${SNIPPETS_MANAGEMENT_FOLDER:-/var/lib/supabase/snippets}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+
+volumes:
+  db-data:
+  minio-data:
+  storage-data:
+  studio-data:
