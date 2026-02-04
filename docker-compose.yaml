@@ -98,6 +98,7 @@ services:
       DB_USER: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_NAME: ${POSTGRES_DB}
+      LISTEN_PORT: 6432
       AUTH_TYPE: scram-sha-256
       AUTH_USER: ${POSTGRES_USER}
       AUTH_QUERY: SELECT usename, passwd FROM pg_shadow WHERE usename=$1
