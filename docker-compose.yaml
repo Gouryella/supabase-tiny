@@ -21,6 +21,7 @@ services:
     restart: always
     depends_on:
       - db
+      - pgbouncer
     ports:
       - "127.0.0.1:13799:9999"
     environment:
@@ -44,6 +45,7 @@ services:
     restart: always
     depends_on:
       - db
+      - pgbouncer
     ports:
       - "127.0.0.1:13730:3000"
     environment:
@@ -61,6 +63,7 @@ services:
     restart: always
     depends_on:
       - db
+      - pgbouncer
     ports:
       - "127.0.0.1:13740:4000"
     environment:
@@ -82,7 +85,7 @@ services:
       RUN_JANITOR: "false"
 
   pgbouncer:
-    image: edoburu/pgbouncer:latest
+    image: edoburu/pgbouncer:1.25.1-p0
     container_name: supabase-pgbouncer
     restart: always
     depends_on:
@@ -90,17 +93,18 @@ services:
     ports:
       - "127.0.0.1:13743:6432"
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      POOL_MODE: transaction
-      MAX_CLIENT_CONN: 100
-      DEFAULT_POOL_SIZE: 20
-      RESERVE_POOL_SIZE: 5
-      RESERVE_POOL_TIMEOUT: 5
-      SERVER_RESET_QUERY: DISCARD ALL
-      IGNORE_STARTUP_PARAMETERS: extra_float_digits,search_path
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
       AUTH_TYPE: scram-sha-256
       AUTH_USER: ${POSTGRES_USER}
       AUTH_QUERY: SELECT usename, passwd FROM pg_shadow WHERE usename=$1
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 100
+      DEFAULT_POOL_SIZE: 20
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits,search_path
 
   storage:
     image: supabase/storage-api:v1.33.5
@@ -108,6 +112,7 @@ services:
     restart: always
     depends_on:
       - db
+      - pgbouncer
       - rest
       - minio
     ports:
