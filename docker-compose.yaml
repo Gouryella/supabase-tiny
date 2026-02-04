@@ -82,7 +82,7 @@ services:
       RUN_JANITOR: "false"
 
   pgbouncer:
-    image: bitnami/pgbouncer:latest
+    image: edoburu/pgbouncer:latest
     container_name: supabase-pgbouncer
     restart: always
     depends_on:
@@ -90,20 +90,17 @@ services:
     ports:
       - "127.0.0.1:13743:6432"
     environment:
-      PGBOUNCER_PORT: 6432
-      PGBOUNCER_DATABASE: ${POSTGRES_DB:-postgres}
-      POSTGRESQL_HOST: db
-      POSTGRESQL_PORT: 5432
-      POSTGRESQL_USERNAME: ${POSTGRES_USER:-supabase_admin}
-      POSTGRESQL_PASSWORD: ${POSTGRES_PASSWORD}
-      PGBOUNCER_POOL_MODE: transaction
-      PGBOUNCER_MAX_CLIENT_CONN: 100
-      PGBOUNCER_DEFAULT_POOL_SIZE: 20
-      PGBOUNCER_RESERVE_POOL_SIZE: 5
-      PGBOUNCER_RESERVE_POOL_TIMEOUT: 5
-      PGBOUNCER_SERVER_RESET_QUERY: DISCARD ALL
-      PGBOUNCER_IGNORE_STARTUP_PARAMETERS: extra_float_digits,search_path
-      PGBOUNCER_AUTH_TYPE: scram-sha-256
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 100
+      DEFAULT_POOL_SIZE: 20
+      RESERVE_POOL_SIZE: 5
+      RESERVE_POOL_TIMEOUT: 5
+      SERVER_RESET_QUERY: DISCARD ALL
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits,search_path
+      AUTH_TYPE: scram-sha-256
+      AUTH_USER: ${POSTGRES_USER}
+      AUTH_QUERY: SELECT usename, passwd FROM pg_shadow WHERE usename=$1
 
   storage:
     image: supabase/storage-api:v1.33.5
