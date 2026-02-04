@@ -98,6 +98,7 @@ services:
       RESERVE_POOL_SIZE: 5
       RESERVE_POOL_TIMEOUT: 5
       SERVER_RESET_QUERY: DISCARD ALL
+      IGNORE_STARTUP_PARAMETERS: "extra_float_digits,search_path"
 
   storage:
     image: supabase/storage-api:v1.33.5
