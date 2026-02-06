@@ -181,16 +181,73 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
 
+  functions-init:
+    image: alpine:3.21
+    container_name: supabase-functions-init
+    restart: "no"
+    volumes:
+      - functions-data:/work
+    command:
+      - sh
+      - -ec
+      - |
+        mkdir -p /work/hello /work/main
+        if [ ! -f /work/hello/index.ts ]; then
+          cat > /work/hello/index.ts <<'EOF_HELLO'
+        import { serve } from "https://deno.land/std@0.177.1/http/server.ts";
+
+        serve(async () => {
+          return new Response(
+            JSON.stringify({ msg: "Hello from Edge Functions!" }),
+            { headers: { "Content-Type": "application/json" } }
+          );
+        });
+        EOF_HELLO
+        fi
+        if [ ! -f /work/main/index.ts ]; then
+          cat > /work/main/index.ts <<'EOF_MAIN'
+        import { serve } from "https://deno.land/std@0.177.1/http/server.ts";
+
+        serve(async () => {
+          return new Response(
+            JSON.stringify({ msg: "Hello from main Edge Function" }),
+            { headers: { "Content-Type": "application/json" } }
+          );
+        });
+        EOF_MAIN
+        fi
+        chmod -R 0777 /work
+
+  studio-volume-init:
+    image: alpine:3.21
+    container_name: supabase-studio-volume-init
+    restart: "no"
+    user: "0:0"
+    volumes:
+      - studio-data:/var/lib/supabase
+    command:
+      - sh
+      - -ec
+      - |
+        mkdir -p /var/lib/supabase/snippets /var/lib/supabase/edge-functions
+        chown -R 100:101 /var/lib/supabase
+        chmod -R u+rwX /var/lib/supabase
+
   kong:
     image: kong:2.8.1
     container_name: supabase-kong
     restart: always
     depends_on:
-      - auth
-      - rest
-      - realtime
-      - storage
-      - meta
+      auth:
+        condition: service_started
+      rest:
+        condition: service_started
+      realtime:
+        condition: service_started
+      storage:
+        condition: service_started
+      meta:
+        condition: service_started
     ports:
       - "127.0.0.1:13780:8000"
     environment:
@@ -207,7 +264,10 @@ services:
     container_name: supabase-functions
     restart: always
     depends_on:
-      - kong
+      kong:
+        condition: service_started
+      functions-init:
+        condition: service_completed_successfully
     ports:
       - "127.0.0.1:13792:9000"
     command:
@@ -215,7 +275,7 @@ services:
       - --main-service
       - /home/deno/functions/main
     volumes:
-      - ./functions:/home/deno/functions
+      - functions-data:/home/deno/functions
     environment:
       SUPABASE_URL: http://kong:8000
       SUPABASE_ANON_KEY: ${ANON_KEY}
@@ -229,8 +289,12 @@ services:
     container_name: supabase-studio
     restart: always
     depends_on:
-      - kong
-      - meta
+      kong:
+        condition: service_started
+      meta:
+        condition: service_started
+      studio-volume-init:
+        condition: service_completed_successfully
     ports:
       - "127.0.0.1:13731:3000"
     volumes:
@@ -250,8 +314,6 @@ services:
       AUTH_JWT_SECRET: ${JWT_SECRET}
       NEXT_PUBLIC_SUPABASE_URL: https://${SUPABASE_PUBLIC_DOMAIN}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
-      NEXT_PUBLIC_SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
-      NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
       # Self-hosted mode configuration
       NEXT_PUBLIC_IS_PLATFORM: "false"
       ANALYTICS_ENABLED: ${ANALYTICS_ENABLED:-false}
@@ -274,3 +336,4 @@ volumes:
   minio-data:
   storage-data:
   studio-data:
+  functions-data:

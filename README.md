@@ -24,22 +24,28 @@ If you want “clone → run one command → get a working Supabase”, this rep
 - **Low-memory friendly:** no bundled analytics/logging stack, and you can start only the services you need (keep Studio/Functions optional).
 
 ## Quick Start
-1. Clone:
+1. One-command deploy (auto-install Docker, auto-download compose/kong template, then deploy):
    ```bash
-   git clone https://github.com/Gouryella/supabase-deploy.git
-   cd supabase-deploy
+   curl -fsSL https://raw.githubusercontent.com/Gouryella/supabase-deploy/main/install.sh | bash
    ```
-2. Set your domain in `Caddyfile` (replace `example.com`).
-3. Deploy:
+2. Set your domain in `/root/supabase-deploy/Caddyfile` (or `$HOME/supabase-deploy/Caddyfile` if not root), then rerun:
    ```bash
-   chmod +x deploy.sh
-   ./deploy.sh
+   bash /root/supabase-deploy/deploy.sh
    ```
-4. Open Studio:
+3. Open Studio:
    - `https://<your-domain>/`
 
+### Optional Flags
+```bash
+# Force container recreation
+curl -fsSL https://raw.githubusercontent.com/Gouryella/supabase-deploy/main/install.sh | bash -s -- --recreate
+
+# Custom install path
+curl -fsSL https://raw.githubusercontent.com/Gouryella/supabase-deploy/main/install.sh | INSTALL_DIR=/opt/supabase bash
+```
+
 ## Prerequisites
-- Docker + Docker Compose
+- Linux host with `curl` (Docker is auto-installed by `install.sh` if missing)
 - `openssl`
 - `python3` or `envsubst` (used to render `config/kong.yml`)
 - Caddy (recommended) or any reverse proxy you prefer
@@ -185,7 +191,7 @@ docker compose down
 - Rotate keys and passwords if you suspect they were exposed.
 
 ## Production Hardening (Recommended)
-- Restrict Postgres to localhost by changing the port mapping in `docker-compose.yaml`:
+- Restrict Postgres to localhost by changing the port mapping in `docker-compose.yml`:
   ```diff
   - "13732:5432"
   + "127.0.0.1:13732:5432"

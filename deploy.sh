@@ -43,6 +43,53 @@ log_error() {
   echo "[ERROR] $*" >&2
 }
 
+run_as_root() {
+  if [ "$(id -u)" -eq 0 ]; then
+    "$@"
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo "$@"
+  else
+    log_error "Need root privileges for Docker installation, but sudo is not available."
+    exit 1
+  fi
+}
+
+ensure_docker_ready() {
+    if ! command -v docker >/dev/null 2>&1; then
+        if ! command -v curl >/dev/null 2>&1; then
+            log_error "docker command not found and curl is missing; cannot auto-install Docker."
+            exit 1
+        fi
+        log_warn "Docker not found. Installing with get.docker.com..."
+        curl -fsSL https://get.docker.com | run_as_root bash -s docker
+        if command -v systemctl >/dev/null 2>&1; then
+            run_as_root systemctl enable --now docker >/dev/null 2>&1 || true
+        fi
+    fi
+
+    if ! command -v docker >/dev/null 2>&1; then
+        log_error "Docker installation failed."
+        exit 1
+    fi
+
+    if ! docker compose version >/dev/null 2>&1; then
+        if ! command -v curl >/dev/null 2>&1; then
+            log_error "docker compose plugin not found and curl is missing; cannot auto-install Docker."
+            exit 1
+        fi
+        log_warn "docker compose plugin not found. Re-running Docker installer..."
+        curl -fsSL https://get.docker.com | run_as_root bash -s docker
+        if command -v systemctl >/dev/null 2>&1; then
+            run_as_root systemctl enable --now docker >/dev/null 2>&1 || true
+        fi
+    fi
+
+    if ! docker compose version >/dev/null 2>&1; then
+        log_error "docker compose plugin is still unavailable after installation."
+        exit 1
+    fi
+}
+
 wait_for_service() {
   local name="$1"
   local check_cmd="$2"
@@ -67,7 +114,7 @@ wait_for_service() {
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 ENV_FILE="$DIR/.env"
-DOCKER_COMPOSE_FILE="$DIR/docker-compose.yaml"
+DOCKER_COMPOSE_FILE="$DIR/docker-compose.yml"
 
 # Parse command-line arguments
 SKIP_START=false
@@ -96,6 +143,8 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+ensure_docker_ready
 
 # Load existing .env (if present) so missing fields can be filled in
 if [ -f "$ENV_FILE" ]; then
@@ -235,82 +284,7 @@ else
     exit 1
 fi
 
-# Create sample Edge Functions directories and files
-mkdir -p "$DIR/functions/hello"
-if [ ! -f "$DIR/functions/hello/index.ts" ]; then
-    cat > "$DIR/functions/hello/index.ts" <<'EOF_HELLO'
-import { serve } from "https://deno.land/std@0.177.1/http/server.ts";
-
-serve(async () => {
-  return new Response(
-    `"Hello from Edge Functions!"`,
-    { headers: { "Content-Type": "application/json" } },
-  );
-});
-EOF_HELLO
-fi
-
-mkdir -p "$DIR/functions/main"
-if [ ! -f "$DIR/functions/main/index.ts" ]; then
-    cat > "$DIR/functions/main/index.ts" <<'EOF_MAIN'
-import { serve } from 'https://deno.land/std@0.131.0/http/server.ts';
-import * as jose from 'https://deno.land/x/jose@v4.14.4/index.ts';
-
-const JWT_SECRET = Deno.env.get('JWT_SECRET');
-const VERIFY_JWT = Deno.env.get('VERIFY_JWT') === 'true';
-
-function getAuthToken(req: Request) {
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader) {
-    throw new Error('Missing authorization header');
-  }
-  const [bearer, token] = authHeader.split(' ');
-  if (bearer !== 'Bearer') {
-    throw new Error(`Auth header is not 'Bearer ${token}'`);
-  }
-  return token;
-}
-
-async function verifyJWT(jwt: string): Promise<boolean> {
-  const encoder = new TextEncoder();
-  const secretKey = encoder.encode(JWT_SECRET);
-  try {
-    await jose.jwtVerify(jwt, secretKey);
-  } catch (err) {
-    console.error(err);
-    return false;
-  }
-  return true;
-}
-
-serve(async (req: Request) => {
-  if (req.method !== 'OPTIONS' && VERIFY_JWT) {
-    try {
-      const token = getAuthToken(req);
-      const isValidJWT = await verifyJWT(token);
-      if (!isValidJWT) {
-        return new Response(JSON.stringify({ msg: 'JWT is invalid' }), {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-    } catch (err) {
-      return new Response(JSON.stringify({ msg: err.message }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-  }
-
-  return new Response(
-    JSON.stringify({ msg: 'Hello from Edge Functions!' }),
-    { headers: { 'Content-Type': 'application/json' } },
-  );
-});
-EOF_MAIN
-fi
-
-log_info "Configuration files generated."
+log_info "Kong config is ready. Runtime function/studio data dirs are initialized by docker volume init services."
 
 # If config-only, stop here
 if [ "$SKIP_START" = true ]; then
@@ -320,7 +294,7 @@ fi
 
 # Ensure docker-compose file exists
 if [ ! -f "$DOCKER_COMPOSE_FILE" ]; then
-    log_error "docker-compose.yaml not found; place it in the script directory."
+    log_error "docker-compose.yml not found; place it in the script directory."
     exit 1
 fi
 
