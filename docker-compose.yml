@@ -307,17 +307,14 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      SUPABASE_URL: http://kong:8000
       SUPABASE_PUBLIC_URL: https://${SUPABASE_PUBLIC_DOMAIN}
       SUPABASE_ANON_KEY: ${ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SERVICE_ROLE_KEY}
       AUTH_JWT_SECRET: ${JWT_SECRET}
-      NEXT_PUBLIC_SUPABASE_URL: https://${SUPABASE_PUBLIC_DOMAIN}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${ANON_KEY}
+      SUPABASE_URL: http://kong:8000
       # Self-hosted mode configuration
       NEXT_PUBLIC_IS_PLATFORM: "false"
       ANALYTICS_ENABLED: ${ANALYTICS_ENABLED:-false}
-      NEXT_ANALYTICS_BACKEND_PROVIDER: ""
       DEFAULT_ORGANIZATION_NAME: "Default Organization"
       DEFAULT_PROJECT_NAME: "Default Project"
       # Logflare/Analytics disabled for self-hosted
