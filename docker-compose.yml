@@ -181,58 +181,6 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
 
-  functions-init:
-    image: alpine:3.21
-    container_name: supabase-functions-init
-    restart: "no"
-    volumes:
-      - functions-data:/work
-    command:
-      - sh
-      - -ec
-      - |
-        mkdir -p /work/hello /work/main
-        if [ ! -f /work/hello/index.ts ]; then
-          cat > /work/hello/index.ts <<'EOF_HELLO'
-        import { serve } from "https://deno.land/std@0.177.1/http/server.ts";
-
-        serve(async () => {
-          return new Response(
-            JSON.stringify({ msg: "Hello from Edge Functions!" }),
-            { headers: { "Content-Type": "application/json" } }
-          );
-        });
-        EOF_HELLO
-        fi
-        if [ ! -f /work/main/index.ts ]; then
-          cat > /work/main/index.ts <<'EOF_MAIN'
-        import { serve } from "https://deno.land/std@0.177.1/http/server.ts";
-
-        serve(async () => {
-          return new Response(
-            JSON.stringify({ msg: "Hello from main Edge Function" }),
-            { headers: { "Content-Type": "application/json" } }
-          );
-        });
-        EOF_MAIN
-        fi
-        chmod -R 0777 /work
-
-  studio-volume-init:
-    image: alpine:3.21
-    container_name: supabase-studio-volume-init
-    restart: "no"
-    user: "0:0"
-    volumes:
-      - studio-data:/var/lib/supabase
-    command:
-      - sh
-      - -ec
-      - |
-        mkdir -p /var/lib/supabase/snippets /var/lib/supabase/edge-functions
-        chown -R 100:101 /var/lib/supabase
-        chmod -R u+rwX /var/lib/supabase
-
   kong:
     image: kong:2.8.1
     container_name: supabase-kong
@@ -266,8 +214,6 @@ services:
     depends_on:
       kong:
         condition: service_started
-      functions-init:
-        condition: service_completed_successfully
     ports:
       - "127.0.0.1:13792:9000"
     command:
@@ -275,7 +221,7 @@ services:
       - --main-service
       - /home/deno/functions/main
     volumes:
-      - functions-data:/home/deno/functions
+      - ./volumes/functions:/home/deno/functions
     environment:
       SUPABASE_URL: http://kong:8000
       SUPABASE_ANON_KEY: ${ANON_KEY}
@@ -293,12 +239,11 @@ services:
         condition: service_started
       meta:
         condition: service_started
-      studio-volume-init:
-        condition: service_completed_successfully
     ports:
       - "127.0.0.1:13731:3000"
     volumes:
-      - studio-data:/var/lib/supabase
+      - ./volumes/snippets:/app/snippets
+      - ./volumes/functions:/app/edge-functions
     environment:
       STUDIO_PG_META_URL: http://meta:8080
       PG_META_CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
@@ -325,12 +270,11 @@ services:
       GOTRUE_URL: http://auth:9999
       # Reference ID for default project
       SUPABASE_PROJECT_REF: default
-      SNIPPETS_MANAGEMENT_FOLDER: ${SNIPPETS_MANAGEMENT_FOLDER:-/var/lib/supabase/snippets}
+      SNIPPETS_MANAGEMENT_FOLDER: ${SNIPPETS_MANAGEMENT_FOLDER:-/app/snippets}
+      EDGE_FUNCTIONS_MANAGEMENT_FOLDER: ${EDGE_FUNCTIONS_MANAGEMENT_FOLDER:-/app/edge-functions}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
 
 volumes:
   db-data:
   minio-data:
   storage-data:
-  studio-data:
-  functions-data:

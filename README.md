@@ -96,6 +96,7 @@ It performs the kind of glue-work you usually end up doing by hand:
 - Generates `.env` (preserves existing values; fills missing ones)
 - Generates `ANON_KEY` and `SERVICE_ROLE_KEY` as **JWTs** signed by `JWT_SECRET`
 - Renders `config/kong.yml` from `config/kong.yml.template`
+- Initializes runtime bind-mount directories (`./volumes/functions`, `./volumes/snippets`)
 - Starts Postgres + MinIO first, then waits for readiness
 - Waits for Supabase initialization roles to exist (`supabase_auth_admin`, `supabase_storage_admin`)
 - Creates the `_supabase` database and `_realtime` schema if missing
@@ -152,7 +153,8 @@ Most service ports are bound to `127.0.0.1` (loopback) unless noted otherwise.
 ## Configuration
 - `.env` is generated automatically and contains secrets + service keys.
 - `config/kong.yml` is generated from `config/kong.yml.template` (edit the template, not the output).
-- `functions/` is mounted into the Edge Functions container.
+- `./volumes/functions/` is mounted into Edge Functions and Studio's Edge Functions manager.
+- `./volumes/snippets/` is mounted into Studio snippets management.
 
 Important values:
 - `SUPABASE_PUBLIC_DOMAIN` (used for Studio URLs and GoTrue site URL)

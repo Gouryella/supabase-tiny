@@ -110,6 +110,39 @@ wait_for_service() {
   return 1
 }
 
+ensure_runtime_dirs() {
+  local functions_dir="$DIR/volumes/functions"
+  local snippets_dir="$DIR/volumes/snippets"
+
+  mkdir -p "$functions_dir/main" "$functions_dir/hello" "$snippets_dir"
+
+  if [ ! -f "$functions_dir/main/index.ts" ]; then
+    cat > "$functions_dir/main/index.ts" <<'EOF_MAIN'
+import { serve } from "https://deno.land/std@0.177.1/http/server.ts";
+
+serve(async () => {
+  return new Response(
+    JSON.stringify({ msg: "Hello from main Edge Function" }),
+    { headers: { "Content-Type": "application/json" } }
+  );
+});
+EOF_MAIN
+  fi
+
+  if [ ! -f "$functions_dir/hello/index.ts" ]; then
+    cat > "$functions_dir/hello/index.ts" <<'EOF_HELLO'
+import { serve } from "https://deno.land/std@0.177.1/http/server.ts";
+
+serve(async () => {
+  return new Response(
+    JSON.stringify({ msg: "Hello from Edge Functions!" }),
+    { headers: { "Content-Type": "application/json" } }
+  );
+});
+EOF_HELLO
+  fi
+}
+
 # Resolve the script directory
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
@@ -187,8 +220,17 @@ if [ -z "${SUPABASE_PUBLIC_DOMAIN:-}" ]; then
     fi
 fi
 ANALYTICS_ENABLED="${ANALYTICS_ENABLED:-false}"
-SNIPPETS_MANAGEMENT_FOLDER="${SNIPPETS_MANAGEMENT_FOLDER:-/var/lib/supabase/snippets}"
+SNIPPETS_MANAGEMENT_FOLDER="${SNIPPETS_MANAGEMENT_FOLDER:-/app/snippets}"
+EDGE_FUNCTIONS_MANAGEMENT_FOLDER="${EDGE_FUNCTIONS_MANAGEMENT_FOLDER:-/app/edge-functions}"
 OPENAI_API_KEY="${OPENAI_API_KEY:-}"
+
+# Migrate legacy Studio folder defaults from the old named-volume layout.
+if [ "$SNIPPETS_MANAGEMENT_FOLDER" = "/var/lib/supabase/snippets" ]; then
+    SNIPPETS_MANAGEMENT_FOLDER="/app/snippets"
+fi
+if [ "$EDGE_FUNCTIONS_MANAGEMENT_FOLDER" = "/var/lib/supabase/edge-functions" ]; then
+    EDGE_FUNCTIONS_MANAGEMENT_FOLDER="/app/edge-functions"
+fi
 
 # Supabase ANON_KEY / SERVICE_ROLE_KEY must be JWTs (used by PostgREST/GoTrue).
 # Older scripts generated random strings; this corrects them to JWTs.
@@ -240,6 +282,7 @@ VAULT_ENC_KEY=$VAULT_ENC_KEY
 SUPABASE_PUBLIC_DOMAIN=$SUPABASE_PUBLIC_DOMAIN
 ANALYTICS_ENABLED=$ANALYTICS_ENABLED
 SNIPPETS_MANAGEMENT_FOLDER=$SNIPPETS_MANAGEMENT_FOLDER
+EDGE_FUNCTIONS_MANAGEMENT_FOLDER=$EDGE_FUNCTIONS_MANAGEMENT_FOLDER
 OPENAI_API_KEY=$OPENAI_API_KEY
 EOF_ENV
 
@@ -284,7 +327,8 @@ else
     exit 1
 fi
 
-log_info "Kong config is ready. Runtime function/studio data dirs are initialized by docker volume init services."
+ensure_runtime_dirs
+log_info "Kong config is ready. Runtime bind-mount directories are initialized under ./volumes."
 
 # If config-only, stop here
 if [ "$SKIP_START" = true ]; then
