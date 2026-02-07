@@ -162,15 +162,6 @@ services:
           - /storage/v1/
     plugins:
       - name: cors
-      - name: key-auth
-        config:
-          hide_credentials: true
-      - name: acl
-        config:
-          hide_groups_header: true
-          allow:
-            - admin
-            - anon
 
   - name: functions-v1
     url: http://functions:9000/
