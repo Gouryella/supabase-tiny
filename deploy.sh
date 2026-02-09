@@ -233,16 +233,21 @@ if [ -f "$DIR/Caddyfile" ]; then
 fi
 
 if [ -z "${SUPABASE_PUBLIC_DOMAIN:-}" ]; then
+    domain_default="${derived_domain:-example.com}"
     if [ -t 0 ]; then
-        if [ -n "$derived_domain" ]; then
-            read -r -p "Enter SUPABASE_PUBLIC_DOMAIN [$derived_domain]: " SUPABASE_PUBLIC_DOMAIN
-            SUPABASE_PUBLIC_DOMAIN="${SUPABASE_PUBLIC_DOMAIN:-$derived_domain}"
+        read -r -p "Enter SUPABASE_PUBLIC_DOMAIN [$domain_default]: " SUPABASE_PUBLIC_DOMAIN
+        SUPABASE_PUBLIC_DOMAIN="${SUPABASE_PUBLIC_DOMAIN:-$domain_default}"
+    elif { exec 3</dev/tty; } 2>/dev/null; then
+        printf "Enter SUPABASE_PUBLIC_DOMAIN [%s]: " "$domain_default" >/dev/tty
+        if read -r SUPABASE_PUBLIC_DOMAIN <&3; then
+            SUPABASE_PUBLIC_DOMAIN="${SUPABASE_PUBLIC_DOMAIN:-$domain_default}"
         else
-            read -r -p "Enter SUPABASE_PUBLIC_DOMAIN [example.com]: " SUPABASE_PUBLIC_DOMAIN
-            SUPABASE_PUBLIC_DOMAIN="${SUPABASE_PUBLIC_DOMAIN:-example.com}"
+            SUPABASE_PUBLIC_DOMAIN="$domain_default"
+            log_warn "Could not read SUPABASE_PUBLIC_DOMAIN from terminal; using ${SUPABASE_PUBLIC_DOMAIN}."
         fi
+        exec 3<&-
     else
-        SUPABASE_PUBLIC_DOMAIN="${derived_domain:-example.com}"
+        SUPABASE_PUBLIC_DOMAIN="$domain_default"
         log_warn "SUPABASE_PUBLIC_DOMAIN not set; using ${SUPABASE_PUBLIC_DOMAIN}. Set it in the environment to override."
     fi
 fi

@@ -31,6 +31,8 @@ If you want “clone → run one command → get a working Supabase”, this rep
    # Choose at prompt:
    # 1) tiny (Studio Go, lower memory)
    # 2) standard (Official Studio image)
+   # Then enter your SUPABASE_PUBLIC_DOMAIN (example: supabase.yourdomain.com)
+   # Finally confirm deployment with y/N
    ```
 2. Set your domain in `/root/supabase-tiny/Caddyfile` (or `$HOME/supabase-tiny/Caddyfile` if not root), then rerun:
    ```bash
@@ -49,6 +51,9 @@ curl -fsSL https://raw.githubusercontent.com/Gouryella/supabase-tiny/main/instal
 
 # Force container recreation
 curl -fsSL https://raw.githubusercontent.com/Gouryella/supabase-tiny/main/install.sh | bash -s -- --recreate
+
+# Skip final y/N confirmation (for automation)
+curl -fsSL https://raw.githubusercontent.com/Gouryella/supabase-tiny/main/install.sh | bash -s -- --yes
 
 # Custom install path
 curl -fsSL https://raw.githubusercontent.com/Gouryella/supabase-tiny/main/install.sh | INSTALL_DIR=/opt/supabase bash

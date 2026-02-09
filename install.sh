@@ -82,25 +82,35 @@ select_profile_if_needed() {
     return 0
   fi
 
-  if ! { exec 3<> /dev/tty; } 2>/dev/null; then
+  local prompt_fd
+  prompt_fd=""
+
+  if [ -t 0 ]; then
+    prompt_fd=0
+  elif { exec 3</dev/tty; } 2>/dev/null; then
+    prompt_fd=3
+  else
     log_info "No interactive terminal detected; defaulting to tiny profile."
     return 0
   fi
 
+  close_prompt_fd() {
+    if [ "$prompt_fd" = "3" ]; then
+      exec 3<&-
+    fi
+  }
+
   local choice
   while true; do
-    {
-      echo
-      echo "Choose deployment profile:"
-      echo "  1) tiny (Studio Go, lower memory)"
-      echo "  2) standard (Official Studio image)"
-      printf "Enter choice [1/2] (default: 1): "
-    } >&3
+    echo >&2
+    echo "Choose deployment profile:" >&2
+    echo "  1) tiny (Studio Go, lower memory)" >&2
+    echo "  2) standard (Official Studio image)" >&2
+    printf "Enter choice [1/2] (default: 1): " >&2
 
-    if ! read -r choice <&3; then
+    if ! read -r -u "$prompt_fd" choice; then
       log_warn "Unable to read your choice; defaulting to tiny profile."
-      exec 3<&-
-      exec 3>&-
+      close_prompt_fd
       return 0
     fi
 
@@ -111,8 +121,7 @@ select_profile_if_needed() {
         SELECTED_PROFILE="tiny"
         PROMPT_DEPLOY_ARGS=("--tiny")
         log_info "Profile selected: tiny"
-        exec 3<&-
-        exec 3>&-
+        close_prompt_fd
         return 0
         ;;
       2)
@@ -120,12 +129,66 @@ select_profile_if_needed() {
         SELECTED_PROFILE="standard"
         PROMPT_DEPLOY_ARGS=("--standard")
         log_info "Profile selected: standard"
-        exec 3<&-
-        exec 3>&-
+        close_prompt_fd
         return 0
         ;;
       *)
-        echo "Invalid choice. Please enter 1 or 2." >&3
+        echo "Invalid choice. Please enter 1 or 2." >&2
+        ;;
+    esac
+  done
+}
+
+confirm_deploy_if_needed() {
+  if [ "$AUTO_CONFIRM" = true ]; then
+    return 0
+  fi
+
+  local prompt_fd
+  prompt_fd=""
+
+  if [ -t 0 ]; then
+    prompt_fd=0
+  elif { exec 4</dev/tty; } 2>/dev/null; then
+    prompt_fd=4
+  else
+    log_info "No interactive terminal detected; proceeding without deploy confirmation."
+    return 0
+  fi
+
+  local answer
+  while true; do
+    printf "Proceed with deployment now? [y/N]: " >&2
+
+    if ! read -r -u "$prompt_fd" answer; then
+      answer=""
+    fi
+
+    case "${answer,,}" in
+      y|yes)
+        if [ "$prompt_fd" = "4" ]; then
+          exec 4<&-
+        fi
+        return 0
+        ;;
+      ""|n|no)
+        if [ "$prompt_fd" = "4" ]; then
+          exec 4<&-
+        fi
+
+        local run_later_cmd=(bash "$INSTALL_DIR/deploy.sh")
+        run_later_cmd+=("${FALLBACK_DEPLOY_ARGS[@]}")
+        run_later_cmd+=("${PROMPT_DEPLOY_ARGS[@]}")
+        run_later_cmd+=("${DEPLOY_PASSTHROUGH_ARGS[@]}")
+
+        log_info "Deployment skipped."
+        printf "Run later: "
+        printf '%q ' "${run_later_cmd[@]}"
+        printf "\n"
+        exit 0
+        ;;
+      *)
+        echo "Invalid choice. Please enter y or n." >&2
         ;;
     esac
   done
@@ -142,15 +205,25 @@ REPO_RAW_BASE="${REPO_RAW_BASE:-https://raw.githubusercontent.com/Gouryella/supa
 USER_SELECTED_PROFILE=false
 SELECTED_PROFILE=""
 PROMPT_DEPLOY_ARGS=()
+AUTO_CONFIRM=false
+DEPLOY_PASSTHROUGH_ARGS=()
 for arg in "$@"; do
   case "$arg" in
     --tiny)
       USER_SELECTED_PROFILE=true
       SELECTED_PROFILE="tiny"
+      DEPLOY_PASSTHROUGH_ARGS+=("$arg")
       ;;
     --standard)
       USER_SELECTED_PROFILE=true
       SELECTED_PROFILE="standard"
+      DEPLOY_PASSTHROUGH_ARGS+=("$arg")
+      ;;
+    --yes)
+      AUTO_CONFIRM=true
+      ;;
+    *)
+      DEPLOY_PASSTHROUGH_ARGS+=("$arg")
       ;;
   esac
 done
@@ -187,7 +260,8 @@ download_file "Caddyfile"
 chmod +x "$INSTALL_DIR/deploy.sh"
 
 log_info "Bootstrap files are ready."
+confirm_deploy_if_needed
 log_info "Starting deployment..."
 
 cd "$INSTALL_DIR"
-exec bash "$INSTALL_DIR/deploy.sh" "${FALLBACK_DEPLOY_ARGS[@]}" "${PROMPT_DEPLOY_ARGS[@]}" "$@"
+exec bash "$INSTALL_DIR/deploy.sh" "${FALLBACK_DEPLOY_ARGS[@]}" "${PROMPT_DEPLOY_ARGS[@]}" "${DEPLOY_PASSTHROUGH_ARGS[@]}"
