@@ -251,7 +251,7 @@ services:
     volumes:
       - ./volumes/snippets:/app/snippets
       - ./volumes/functions:/app/edge-functions
-      - studio:/home/app/.studio
+      - ./volumes/studio-state:/home/app/.studio
     environment:
       STUDIO_PG_META_URL: http://meta:8080
       PG_META_CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
@@ -280,7 +280,7 @@ services:
       SUPABASE_PROJECT_REF: default
       SNIPPETS_MANAGEMENT_FOLDER: ${SNIPPETS_MANAGEMENT_FOLDER:-/app/snippets}
       EDGE_FUNCTIONS_MANAGEMENT_FOLDER: ${EDGE_FUNCTIONS_MANAGEMENT_FOLDER:-/app/edge-functions}
-      SUPABASE_STUDIO_GO_STATE_FILE: "./.studio/state.json"
+      SUPABASE_STUDIO_GO_STATE_FILE: /home/app/.studio/state.json
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_API_URL: ${OPENAI_API_URL}
       OPENAI_API_MODEL: ${OPENAI_API_MODEL}
@@ -289,4 +289,3 @@ volumes:
   db-data:
   minio-data:
   storage-data:
-  studio:
