@@ -34,6 +34,7 @@ If you want “clone → run one command → get a working Supabase”, this rep
    # Then enter your SUPABASE_PUBLIC_DOMAIN (example: supabase.yourdomain.com)
    # Finally confirm deployment with y/N
    ```
+   Installer only downloads the compose file for the selected profile.
 2. Set your domain in `/root/supabase-tiny/Caddyfile` (or `$HOME/supabase-tiny/Caddyfile` if not root), then rerun:
    ```bash
    bash /root/supabase-tiny/deploy.sh

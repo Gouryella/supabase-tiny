@@ -203,7 +203,7 @@ INSTALL_DIR="${INSTALL_DIR:-$DEFAULT_INSTALL_DIR}"
 REPO_RAW_BASE="${REPO_RAW_BASE:-https://raw.githubusercontent.com/Gouryella/supabase-tiny/main}"
 
 USER_SELECTED_PROFILE=false
-SELECTED_PROFILE=""
+SELECTED_PROFILE="tiny"
 PROMPT_DEPLOY_ARGS=()
 AUTO_CONFIRM=false
 DEPLOY_PASSTHROUGH_ARGS=()
@@ -237,23 +237,37 @@ log_info "Install directory: $INSTALL_DIR"
 log_info "Asset source: $REPO_RAW_BASE"
 
 select_profile_if_needed
+log_info "Selected profile: $SELECTED_PROFILE"
 
 ensure_docker
 
 mkdir -p "$INSTALL_DIR/config"
 
 download_file "deploy.sh"
-download_file "docker-compose.yml"
-if ! download_file_optional "docker-compose.tiny.yml"; then
-  if [ "$SELECTED_PROFILE" = "tiny" ]; then
-    log_error "Tiny profile was selected, but docker-compose.tiny.yml is unavailable from $REPO_RAW_BASE."
+
+case "$SELECTED_PROFILE" in
+  tiny)
+    if ! download_file_optional "docker-compose.tiny.yml"; then
+      if [ "$USER_SELECTED_PROFILE" = true ]; then
+        log_error "Tiny profile was selected, but docker-compose.tiny.yml is unavailable from $REPO_RAW_BASE."
+        exit 1
+      fi
+
+      log_warn "Tiny compose is missing; falling back to standard profile."
+      SELECTED_PROFILE="standard"
+      FALLBACK_DEPLOY_ARGS=("--standard")
+      download_file "docker-compose.yml"
+    fi
+    ;;
+  standard)
+    download_file "docker-compose.yml"
+    ;;
+  *)
+    log_error "Unknown profile selected: $SELECTED_PROFILE"
     exit 1
-  fi
-  if [ "$USER_SELECTED_PROFILE" = false ]; then
-    log_warn "Tiny compose is missing; falling back to standard profile."
-    FALLBACK_DEPLOY_ARGS=("--standard")
-  fi
-fi
+    ;;
+esac
+
 download_file "config/kong.yml.template"
 download_file "Caddyfile"
 
