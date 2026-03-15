@@ -1,6 +1,6 @@
 services:
   db:
-    image: supabase/postgres:15.8.1.085
+    image: supabase/postgres:17.6.1.096
     container_name: supabase-db
     restart: always
     ports:
@@ -16,7 +16,7 @@ services:
       POSTGRES_MAINTENANCE_WORK_MEM: 64MB
 
   auth:
-    image: supabase/gotrue:v2.185.0
+    image: supabase/gotrue:v2.186.0
     container_name: supabase-auth
     restart: always
     depends_on:
@@ -40,7 +40,7 @@ services:
       GOTRUE_MAILER_AUTOCONFIRM: "false"
 
   rest:
-    image: postgrest/postgrest:v14.3
+    image: postgrest/postgrest:v14.5
     container_name: supabase-rest
     restart: always
     depends_on:
@@ -58,7 +58,7 @@ services:
       PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXP:-3600}
 
   realtime:
-    image: supabase/realtime:v2.72.0
+    image: supabase/realtime:v2.76.5
     container_name: supabase-realtime
     restart: always
     depends_on:
@@ -108,7 +108,7 @@ services:
       IGNORE_STARTUP_PARAMETERS: extra_float_digits,search_path
 
   storage:
-    image: supabase/storage-api:v1.33.5
+    image: supabase/storage-api:v1.37.8
     container_name: supabase-storage
     restart: always
     depends_on:
@@ -157,7 +157,7 @@ services:
       IMGPROXY_ENABLE_WEBP_DETECTION: "true"
 
   meta:
-    image: supabase/postgres-meta:v0.95.1
+    image: supabase/postgres-meta:v0.95.2
     container_name: supabase-meta
     restart: always
     depends_on:
@@ -215,7 +215,7 @@ services:
       - ./config/kong.yml:/home/kong/kong.yml:ro
 
   functions:
-    image: supabase/edge-runtime:v1.70.0
+    image: supabase/edge-runtime:v1.70.3
     container_name: supabase-functions
     restart: always
     depends_on:
